@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Particle Scattering Explorer</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#161b22; --edge:#242c38; --ink:#e6edf3; --dim:#8b98a5;
+    --accent:#2dd4bf; --warn:#f59e0b; --bad:#f87171;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  header{padding:16px 22px;border-bottom:1px solid var(--edge)}
+  h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.2px}
+  .sub{color:var(--dim);font-size:12.5px;margin-top:3px}
+  #selftest{margin-top:8px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .ok{color:var(--accent)} .bad{color:var(--bad)}
+  .app{display:grid;grid-template-columns:300px 1fr;gap:0;align-items:start}
+  aside{padding:16px 18px;border-right:1px solid var(--edge)}
+  main{padding:14px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .panel{background:var(--panel);border:1px solid var(--edge);border-radius:10px;padding:10px 12px}
+  .panel h3{margin:0 0 2px;font-size:13px;font-weight:600}
+  .panel .cap{color:var(--dim);font-size:11.5px;margin-bottom:6px;min-height:30px}
+  .plot{width:100%;height:330px}
+  label{display:block;margin:11px 0 3px;font-size:12px;color:var(--dim)}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  select{width:100%;background:#0d1117;color:var(--ink);border:1px solid var(--edge);
+         border-radius:6px;padding:6px}
+  output{float:right;font-family:ui-monospace,Menlo,monospace;color:var(--ink);font-size:12px}
+  .row{display:flex;gap:10px}
+  .row>div{flex:1}
+  .readout{margin-top:14px;padding-top:12px;border-top:1px solid var(--edge);
+           font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  .readout div{display:flex;justify-content:space-between;padding:1.5px 0;gap:8px}
+  .readout span:last-child{color:var(--accent);text-align:right}
+  .readout span.warnv{color:var(--warn)}
+  .readout span.badv{color:var(--bad)}
+  .chk{display:flex;align-items:center;gap:7px;margin-top:12px;color:var(--dim);font-size:12px}
+  .note{color:var(--warn);font-size:11.5px;margin-top:8px;display:none}
+  button{background:#0d1117;color:var(--ink);border:1px solid var(--edge);border-radius:6px;
+         padding:6px 10px;font-size:12px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button:disabled{opacity:.5;cursor:default}
+  .hide{display:none !important}
+  footer{padding:14px 22px;border-top:1px solid var(--edge);color:var(--dim);font-size:11.5px}
+  code{background:#0d1117;padding:1px 4px;border-radius:3px}
+  @media (max-width:860px){
+    .app{grid-template-columns:1fr}
+    aside{border-right:0;border-bottom:1px solid var(--edge);padding:12px 16px}
+    main{padding:12px 16px}
+    .grid{grid-template-columns:1fr}
+    header,footer{padding-left:16px;padding-right:16px}
+  }
+</style>
+<script>__PLOTLY__</script>
+<script>__MIE_JS__</script>
+<script>__TMATRIX_JS__</script>
+<script>const REFERENCE = __REFERENCE__;</script>
+</head>
+<body>
+<header>
+  <h1>Single-particle scattering explorer: exact Lorenz-Mie and T-matrix (EBCM)</h1>
+  <div class="sub">Spheres solved exactly by Mie. Axisymmetric shapes (spheroids, finite cylinders, Chebyshev particles) by Waterman's extended boundary condition method.</div>
+  <div id="selftest">running self-test&hellip;</div>
+</header>
+
+<div class="app">
+<aside>
+  <label>Preset</label>
+  <select id="preset">
+    <option value="">custom</option>
+    <option value="rayleigh">Rayleigh limit (tiny sphere)</option>
+    <option value="water">Water droplet in air</option>
+    <option value="ps">Polystyrene bead in water</option>
+    <option value="gold">Gold nanosphere in water *</option>
+    <option value="mito">Mitochondrion in cytoplasm *</option>
+    <option value="rbc">Red blood cell, volume-equivalent SPHERE *</option>
+    <option value="rbc_ob">Red blood cell, oblate SPHEROID at 1550 nm *</option>
+    <option value="rbc_disc">Red blood cell, true biconcave DISC (shows EBCM limit) *</option>
+    <option value="disc_demo">Biconcave disc, sub-wavelength (EBCM converges) *</option>
+    <option value="collagen">Collagen-like cylinder *</option>
+  </select>
+
+  <label>Particle shape</label>
+  <select id="shape">
+    <option value="sphere">sphere (exact Mie)</option>
+    <option value="spheroid">spheroid (T-matrix)</option>
+    <option value="cylinder">finite cylinder (T-matrix)</option>
+    <option value="chebyshev">Chebyshev particle (T-matrix)</option>
+    <option value="biconcave">biconcave RBC disc (Evans-Fung) *</option>
+  </select>
+
+  <div id="epsBox" class="hide">
+    <label>Axis ratio <span id="epsWhat">&epsilon;</span> <output id="oeps"></output></label>
+    <input type="range" id="eps" min="0.25" max="4.0" step="0.005" value="2.0">
+  </div>
+  <div id="chebBox" class="hide">
+    <label>Chebyshev degree n <output id="ocheb"></output></label>
+    <input type="range" id="chebN" min="2" max="8" step="1" value="2">
+  </div>
+  <div id="betaBox" class="hide">
+    <label>Incidence angle to symmetry axis <output id="obeta"></output></label>
+    <input type="range" id="beta" min="0" max="90" step="1" value="45">
+  </div>
+
+  <label>Equal-volume radius r<sub>ev</sub> <output id="oa"></output></label>
+  <input type="range" id="a" min="10" max="5000" step="5" value="500">
+
+  <label>Vacuum wavelength &lambda; <output id="olam"></output></label>
+  <input type="range" id="lam" min="300" max="2500" step="1" value="633">
+
+  <div class="row">
+    <div>
+      <label>particle n <output id="onp"></output></label>
+      <input type="range" id="np" min="0.2" max="3.5" step="0.001" value="1.587">
+    </div>
+    <div>
+      <label>particle k <output id="okp"></output></label>
+      <input type="range" id="kp" min="0" max="3.5" step="0.001" value="0">
+    </div>
+  </div>
+
+  <label>medium n <output id="onmed"></output></label>
+  <input type="range" id="nmed" min="1.0" max="1.7" step="0.001" value="1.332">
+
+  <div id="polBox">
+    <label>Incident polarisation</label>
+    <select id="pol">
+      <option value="x">linear, along x</option>
+      <option value="un">unpolarised</option>
+    </select>
+  </div>
+
+  <div id="planeBox">
+    <label>Near-field plane</label>
+    <select id="plane">
+      <option value="E">E-plane (x&ndash;z, contains E)</option>
+      <option value="H">H-plane (y&ndash;z)</option>
+    </select>
+  </div>
+
+  <label>Intensity scale</label>
+  <select id="scale">
+    <option value="log">logarithmic</option>
+    <option value="lin">linear</option>
+  </select>
+
+  <div class="chk" id="nfBox"><input type="checkbox" id="nf" checked><label for="nf" style="margin:0">compute near field</label></div>
+  <div class="note" id="nfnote"></div>
+
+  <div class="readout" id="readout"></div>
+</aside>
+
+<main>
+  <div class="grid">
+    <div class="panel">
+      <h3>Far-field radiation pattern</h3>
+      <div class="cap" id="farcap"></div>
+      <div class="plot" id="far3d"></div>
+    </div>
+
+    <div class="panel">
+      <h3 id="p2title">Near field |E|<sup>2</sup></h3>
+      <div class="cap" id="nearcap"></div>
+      <div class="plot" id="near"></div>
+      <div id="sweepBox" class="hide" style="margin-top:6px">
+        <button id="sweepBtn">compute aspect-ratio sweep (9 T-matrices)</button>
+        <span id="sweepStatus" style="color:var(--dim);font-size:11.5px;margin-left:8px"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 id="p3title">Phase function</h3>
+      <div class="cap" id="polarcap"></div>
+      <div class="plot" id="polar"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Efficiency spectrum</h3>
+      <div class="cap" id="speccap"></div>
+      <div class="plot" id="spec"></div>
+      <div id="specBox" class="hide" style="margin-top:6px">
+        <button id="specBtn">compute T-matrix spectrum (11 wavelengths)</button>
+        <span id="specStatus" style="color:var(--dim);font-size:11.5px;margin-left:8px"></span>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<footer>
+  Spheres: exact Lorenz-Mie (Bohren &amp; Huffman conventions), ported from
+  <code>mie.py</code> (__NCHECKS__ checks). Axisymmetric shapes: Waterman's EBCM as implemented by
+  M. I. Mishchenko (<code>ampld.lp.f</code>), ported to <code>tmatrix.py</code> (__NCHECKS_TM__ checks,
+  including exact agreement with Mie at axis ratio 1 and with the Rayleigh-ellipsoid limit).
+  The badge above re-verifies both JavaScript ports against the Python reference in your browser on every load.
+  <br>
+  <b>Accuracy meter:</b> for a lossless particle the single-scattering albedo must be exactly 1. The readout shows
+  |albedo&minus;1|. It is <i>necessary but not sufficient</i>: near EBCM's double-precision limit the albedo can look
+  good while g is still drifting with the multipole cutoff.
+  <br>
+  <b>*</b> Biological and metallic presets use illustrative values from the literature, not measured for any specific sample.
+  Not for dosimetry or any safety-critical use. Provided as is, without warranty.
+  <span id="built"></span>
+</footer>
+
+<script>
+'use strict';
+const el = id => document.getElementById(id);
+const CTRL = ['a','lam','np','kp','nmed','pol','plane','scale','nf','shape','eps','beta','chebN'];
+const NMAX_CAP = 34;              // beyond this the T-matrix is too slow to keep interactive
+
+const PRESETS = {
+  rayleigh:{a:20,  lam:550, np:1.5,  kp:0,    nmed:1.0,   shape:'sphere'},
+  water:   {a:1000,lam:550, np:1.333,kp:0,    nmed:1.0,   shape:'sphere'},
+  ps:      {a:500, lam:633, np:1.587,kp:0,    nmed:1.332, shape:'sphere'},
+  gold:    {a:25,  lam:520, np:0.72, kp:2.13, nmed:1.332, shape:'sphere'},
+  mito:    {a:400, lam:800, np:1.42, kp:0,    nmed:1.36,  shape:'sphere'},
+  rbc:     {a:2780,lam:800, np:1.40, kp:0,    nmed:1.343, shape:'sphere'},
+  rbc_ob:  {a:2780,lam:1550,np:1.40, kp:0,    nmed:1.343, shape:'spheroid', eps:2.766, beta:45},
+  rbc_disc:{a:2780,lam:1550,np:1.40, kp:0,    nmed:1.343, shape:'biconcave', beta:45},
+  disc_demo:{a:70, lam:1550,np:1.40, kp:0,    nmed:1.343, shape:'biconcave', beta:45},
+  collagen:{a:300, lam:800, np:1.47, kp:0,    nmed:1.36,  shape:'cylinder', eps:0.25, beta:60}
+};
+
+const linspace = (lo,hi,n) => { const o=new Float64Array(n); for(let i=0;i<n;i++) o[i]=lo+(hi-lo)*i/(n-1); return o; };
+const DR = 4;
+const LAYOUT = {paper_bgcolor:'#161b22', plot_bgcolor:'#161b22',
+                font:{color:'#e6edf3',size:11}, margin:{l:40,r:10,t:6,b:34}};
+const CONF = {displayModeBar:true, displaylogo:false, responsive:true};
+
+function readState(){
+  const s = {};
+  for(const k of CTRL) s[k] = (k==='nf') ? el(k).checked : (el(k).type==='range' ? +el(k).value : el(k).value);
+  s.k   = 2*Math.PI*s.nmed/s.lam;      // 1/nm
+  s.x   = s.k*s.a;                     // size parameter on the equal-volume radius
+  s.mr  = s.np/s.nmed;
+  s.mi  = s.kp/s.nmed;
+  s.isSphere = (s.shape==='sphere');
+  s.ct0 = Math.cos(s.beta*Math.PI/180);
+  return s;
+}
+
+function syncLabels(s){
+  el('oa').textContent    = s.a.toFixed(0)+' nm';
+  el('olam').textContent  = s.lam.toFixed(0)+' nm';
+  el('onp').textContent   = s.np.toFixed(3);
+  el('okp').textContent   = s.kp.toFixed(3);
+  el('onmed').textContent = s.nmed.toFixed(3);
+  el('oeps').textContent  = s.eps.toFixed(3);
+  el('ocheb').textContent = s.chebN.toFixed(0);
+  el('obeta').textContent = s.beta.toFixed(0)+'°';
+  el('epsWhat').textContent = s.shape==='cylinder' ? 'D/L' : (s.shape==='chebyshev' ? 'deformation' : 'ε = a/c');
+}
+
+function toggleControls(s){
+  const disc = s.shape==='biconcave';
+  el('epsBox').classList.toggle('hide', s.isSphere || disc);
+  el('chebBox').classList.toggle('hide', s.shape!=='chebyshev');
+  el('betaBox').classList.toggle('hide', s.isSphere);
+  el('polBox').classList.toggle('hide', !s.isSphere);
+  el('planeBox').classList.toggle('hide', !s.isSphere);
+  el('nfBox').classList.toggle('hide', !s.isSphere);
+  el('sweepBox').classList.toggle('hide', s.isSphere || disc);   // no axis ratio to sweep
+  el('specBox').classList.toggle('hide', s.isSphere || disc);
+  el('p2title').textContent = s.isSphere ? 'Near field |E|²'
+      : (disc ? 'EBCM convergence for the concave disc' : 'Shape sweep: g and μₛ′ vs axis ratio');
+  el('p3title').textContent = s.isSphere ? 'Phase function' : 'Orientation-averaged phase function';
+  el('farcap').innerHTML = s.isSphere
+    ? 'radius &prop; dC<sub>sca</sub>/d&Omega;. Light travels toward +z.'
+    : 'Unpolarised Z<sub>11</sub> at the chosen incidence angle, in the particle frame (symmetry axis = z).';
+  el('nearcap').innerHTML = disc
+    ? 'The Evans-Fung biconcave disc is exact geometry, but double-precision EBCM only converges for it sub-wavelength (x<sub>ev</sub> &lt; ~1); at RBC size the albedo meter reads <b>unreliable</b>. The true RBC shape needs the discrete dipole approximation (DDA) or extended-precision EBCM.'
+    : (s.isSphere
+    ? 'Slice through the centre, in units of the radius. Incident wave enters from the left.'
+    : 'EBCM near fields inside the circumscribing sphere are unreliable (Rayleigh hypothesis), so the near field is disabled for non-spheres. This panel instead answers: how much does shape move g and &mu;<sub>s</sub>&prime;?');
+  el('polarcap').innerHTML = s.isSphere
+    ? 'dB relative to the peak. 0&deg; is forward scattering, 180&deg; is backscatter.'
+    : 'Randomly oriented particle, dB relative to peak, with its volume-equivalent Mie sphere overlaid. This is what transport sees.';
+  el('speccap').innerHTML = s.isSphere
+    ? 'Q vs wavelength at fixed a, n, k. <b>No material dispersion:</b> n and k held constant.'
+    : 'Dashed: the volume-equivalent Mie sphere (free). The true T-matrix spectrum needs one T-matrix per wavelength, so it is on demand.';
+
+  // p2 panel body: plot for spheres/sweep-shapes, but for the disc show a short note
+  el('near').classList.toggle('hide', disc);
+  let dn = el('discNote');
+  if(disc){
+    if(!dn){ dn=document.createElement('div'); dn.id='discNote'; dn.style.cssText='color:var(--dim);font-size:12px;padding:6px 4px;line-height:1.65'; el('near').parentNode.insertBefore(dn, el('near').nextSibling); }
+    dn.innerHTML = 'The biconcave disc is <b>axisymmetric and star-shaped</b>, so EBCM applies in principle, '
+      + 'and the geometry here is the exact Evans-Fung profile (volume-matched to the sphere). '
+      + 'But the deep concavity collapses the null-field method&rsquo;s double-precision convergence '
+      + 'domain to <b>x<sub>ev</sub> &lt; ~1</b>. Watch the <b>|albedo &minus; 1|</b> readout: it stays near '
+      + 'zero for the sub-wavelength <i>disc demo</i> preset, and blows up for the true <i>RBC disc</i> '
+      + '(x<sub>ev</sub> &asymp; 10&ndash;30). The oblate-spheroid preset is the best available T-matrix '
+      + 'proxy; the true disc at RBC size needs DDA or extended-precision EBCM.';
+    dn.classList.remove('hide');
+  } else if(dn){ dn.classList.add('hide'); }
+}
+
+/* ---------------- T-matrix cache: T depends on shape and size, not on incidence ---------------- */
+let TCACHE = {key:null};
+function tmatrixFor(s){
+  const key = [s.shape,s.eps,s.chebN,s.a,s.lam,s.np,s.kp,s.nmed].join('|');
+  if(TCACHE.key===key) return TCACHE;
+  const nmax0 = TM.nmaxDefault(s.x);
+  if(nmax0 > NMAX_CAP){ TCACHE = {key, tooBig:true, nmax:nmax0}; return TCACHE; }
+  // the concave disc only converges for x_ev < ~1 (small nmax); beyond that EBCM
+  // diverges and the (large, high-ngauss) build is wasted, so refuse early
+  if(s.shape==='biconcave' && nmax0 > 10){ TCACHE = {key, discOut:true, nmax:nmax0}; return TCACHE; }
+  // the concave disc has sharp surface integrands and needs many more Gauss points
+  const ndgs = (s.shape==='biconcave') ? 40 : 2;
+  const t0 = performance.now();
+  let r, cs, err;
+  const build = (nm, nd) => {
+    const rr = TM.tmatrix(s.a, s.k, s.mr, s.mi, s.shape, s.eps, nm, nm*nd, s.chebN);
+    const cc = TM.crossSectionsRandom(rr.blocks, s.k, s.a);
+    return {r:rr, cs:cc, err:(s.kp===0) ? Math.abs(cc.albedo-1) : NaN};
+  };
+  try{
+    let best = build(nmax0, ndgs);
+    // The default n_max is set by the equal-volume size parameter, which is too small
+    // for elongated particles (a long cylinder's circumscribing sphere is much larger),
+    // and two Gauss points per multipole can under-resolve the surface integrals.
+    // For a lossless particle the albedo meter tells us; if it is poor, try a few
+    // larger (n_max, ngauss) and keep whichever gives the smallest |albedo - 1|.
+    if(s.shape!=='biconcave' && isFinite(best.err) && best.err > 1e-4){
+      for(const [f, nd] of [ [1, 4], [1.35, 4], [1.7, 4]]){
+        const nm = Math.min(NMAX_CAP, Math.ceil(nmax0*f));
+        let c; try{ c = build(nm, nd); }catch(e){ continue; }
+        if(isFinite(c.err) && c.err < best.err) best = c;
+        if(best.err < 1e-6) break;
+      }
+    }
+    r = best.r; cs = best.cs; err = best.err;
+  }catch(e){ TCACHE = {key, failed:e.message}; return TCACHE; }
+  const Tf = TM.fullT(r.blocks, r.nmax);
+  const pf = TM.phaseFunctionRandom(r.blocks, r.nmax, s.k, 10, 24, Math.max(40, r.nmax+16));
+  TCACHE = {key, blocks:r.blocks, nmax:r.nmax, Tf, cs, albErr:err, pf, ms:performance.now()-t0};
+  return TCACHE;
+}
+
+/* ---------------- far-field ---------------- */
+/* the Mie pattern is cheap so it gets a fine grid; the T-matrix pattern costs
+   O(ndir * nmax^2), so it gets a coarser one */
+const TH = linspace(0, Math.PI, 121), PH = linspace(0, 2*Math.PI, 97);
+const TH_T = linspace(0, Math.PI, 91), PH_T = linspace(0, 2*Math.PI, 73);
+
+function farIntensitySphere(s){
+  const A = MIE.amplitudes(s.mr, s.mi, s.x, TH);
+  const un = s.pol==='un';
+  const I = [];
+  for(let p=0;p<PH.length;p++){
+    const row = new Float64Array(TH.length);
+    for(let t=0;t<TH.length;t++) row[t] = MIE.dcs(A.s1r[t],A.s1i[t],A.s2r[t],A.s2i[t], PH[p], un);
+    I.push(row);
+  }
+  return I;
+}
+function farIntensityTM(s, T){
+  const nt = TH_T.length, npz = PH_T.length, nd = nt*npz;
+  const ct = new Float64Array(nd), dphi = new Float64Array(nd);
+  for(let p=0;p<npz;p++) for(let t=0;t<nt;t++){ ct[p*nt+t]=Math.cos(TH_T[t]); dphi[p*nt+t]=PH_T[p]; }
+  const S = TM.amplitudesVec(T.Tf, T.nmax, s.k, s.ct0, ct, dphi);
+  const I = [];
+  for(let p=0;p<npz;p++){
+    const row = new Float64Array(nt);
+    for(let t=0;t<nt;t++){
+      const d = p*nt+t;
+      row[t] = 0.5*(S.vvR[d]**2+S.vvI[d]**2+S.vhR[d]**2+S.vhI[d]**2
+                   +S.hvR[d]**2+S.hvI[d]**2+S.hhR[d]**2+S.hhI[d]**2);
+    }
+    I.push(row);
+  }
+  return I;
+}
+
+function drawFar(s, T){
+  let I, th, ph;
+  if(s.isSphere){ th=TH; ph=PH; I = farIntensitySphere(s); }
+  else if(T && T.blocks){ th=TH_T; ph=PH_T; I = farIntensityTM(s, T); }
+  else { Plotly.purge('far3d'); return; }
+
+  let imax = 0;
+  for(const row of I) for(const v of row) if(v>imax) imax=v;
+  const X=[],Y=[],Z=[],C=[];
+  for(let p=0;p<ph.length;p++){
+    const xr=[],yr=[],zr=[],cr=[];
+    for(let t=0;t<th.length;t++){
+      const ratio = Math.max(I[p][t]/imax, 1e-12);
+      const db = 10*Math.log10(ratio);
+      const rr = (s.scale==='log') ? Math.max(0,(Math.log10(ratio)+DR)/DR) : ratio;
+      const st=Math.sin(th[t]), ct=Math.cos(th[t]);
+      xr.push(rr*st*Math.cos(ph[p])); yr.push(rr*st*Math.sin(ph[p])); zr.push(rr*ct);
+      cr.push(Math.max(db,-10*DR));
+    }
+    X.push(xr);Y.push(yr);Z.push(zr);C.push(cr);
+  }
+  // incident-direction marker: along -z for a sphere, along -(sin b, 0, cos b) otherwise
+  const sb = s.isSphere ? 0 : Math.sin(s.beta*Math.PI/180), cb = s.isSphere ? 1 : Math.cos(s.beta*Math.PI/180);
+  const traces = [{
+    type:'surface', x:X, y:Y, z:Z, surfacecolor:C,
+    colorscale:'Viridis', cmin:-10*DR, cmax:0,
+    colorbar:{title:{text:'dB',side:'right'},thickness:9,len:.8},
+    lighting:{ambient:.75,diffuse:.6,specular:.15}, hoverinfo:'skip'
+  },{
+    type:'scatter3d', mode:'lines+text',
+    x:[-1.22*sb,-1.04*sb], y:[0,0], z:[-1.22*cb,-1.04*cb],
+    line:{color:'#f59e0b',width:5}, text:['incident k',''], textposition:'bottom center',
+    textfont:{color:'#f59e0b',size:10}, hoverinfo:'skip', showlegend:false
+  }];
+  const ax = {showgrid:true,gridcolor:'#2a3441',zeroline:false,showticklabels:false,range:[-1.25,1.25]};
+  Plotly.react('far3d', traces, Object.assign({},LAYOUT,{
+    scene:{xaxis:Object.assign({title:s.isSphere?'x (pol.)':'x'},ax),
+           yaxis:Object.assign({title:'y'},ax),
+           zaxis:Object.assign({title:s.isSphere?'z (prop.)':'z (symmetry axis)'},ax),
+           aspectmode:'cube', camera:{eye:{x:1.5,y:1.5,z:0.7}}},
+    margin:{l:0,r:0,t:0,b:0}}), CONF);
+}
+
+/* ---------------- phase function ---------------- */
+function drawPolar(s, T){
+  if(s.isSphere){
+    const th = linspace(0, Math.PI, 181);
+    const A = MIE.amplitudes(s.mr, s.mi, s.x, th);
+    const un = s.pol==='un';
+    const IE = new Float64Array(181), IH = new Float64Array(181);
+    let mx = 0;
+    for(let i=0;i<181;i++){
+      IE[i] = MIE.dcs(A.s1r[i],A.s1i[i],A.s2r[i],A.s2i[i], 0, un);
+      IH[i] = MIE.dcs(A.s1r[i],A.s1i[i],A.s2r[i],A.s2i[i], Math.PI/2, un);
+      mx = Math.max(mx, IE[i], IH[i]);
+    }
+    const ang=[], rE=[], rH=[];
+    const conv = v => s.scale==='log' ? Math.max(10*Math.log10(Math.max(v/mx,1e-12)), -10*DR) : v/mx;
+    for(let d=0; d<=360; d++){ const i = d<=180 ? d : 360-d; ang.push(d); rE.push(conv(IE[i])); rH.push(conv(IH[i])); }
+    const traces = un
+      ? [{type:'scatterpolar',r:rE,theta:ang,mode:'lines',name:'unpolarised',line:{color:'#2dd4bf',width:1.6}}]
+      : [{type:'scatterpolar',r:rE,theta:ang,mode:'lines',name:'E-plane (φ=0)',line:{color:'#2dd4bf',width:1.6}},
+         {type:'scatterpolar',r:rH,theta:ang,mode:'lines',name:'H-plane (φ=90°)',line:{color:'#f59e0b',width:1.6}}];
+    polarLayout(traces, s);
+    return;
+  }
+  if(!T || !T.blocks){ Plotly.purge('polar'); return; }
+
+  // orientation-averaged Z11 of the shape, and of its volume-equivalent Mie sphere
+  const mu = T.pf.mu, Z = T.pf.Z11, n = mu.length;
+  const thDeg = [], rS = [];
+  let mx = 0; for(const v of Z) mx = Math.max(mx, v);
+  const sphA = MIE.amplitudes(s.mr, s.mi, s.x, Float64Array.from(mu, v=>Math.acos(v)));
+  const Zs = new Float64Array(n);
+  let mxs = 0;
+  for(let i=0;i<n;i++){ Zs[i] = MIE.dcs(sphA.s1r[i],sphA.s1i[i],sphA.s2r[i],sphA.s2i[i],0,true)/(s.k*s.k); mxs=Math.max(mxs,Zs[i]); }
+  const conv = (v,m) => s.scale==='log' ? Math.max(10*Math.log10(Math.max(v/m,1e-12)), -10*DR) : v/m;
+  const ang=[], rShape=[], rSph=[];
+  for(let d=0; d<=360; d++){
+    const a = (d<=180 ? d : 360-d)*Math.PI/180;
+    // nearest node (mu descending)
+    let best=0, bd=9;
+    for(let i=0;i<n;i++){ const dd=Math.abs(Math.acos(mu[i])-a); if(dd<bd){bd=dd;best=i;} }
+    ang.push(d); rShape.push(conv(Z[best],mx)); rSph.push(conv(Zs[best],mxs));
+  }
+  const traces = [
+    {type:'scatterpolar',r:rShape,theta:ang,mode:'lines',name:'this shape',line:{color:'#2dd4bf',width:1.8}},
+    {type:'scatterpolar',r:rSph,theta:ang,mode:'lines',name:'equal-volume sphere',line:{color:'#f59e0b',width:1.4,dash:'dot'}}
+  ];
+  polarLayout(traces, s);
+}
+function polarLayout(traces, s){
+  const rng = s.scale==='log' ? [-10*DR,0] : [0,1];
+  Plotly.react('polar', traces, Object.assign({},LAYOUT,{
+    showlegend:true, legend:{x:.5,y:-.12,xanchor:'center',orientation:'h',font:{size:10}},
+    polar:{bgcolor:'#12171e',
+      radialaxis:{range:rng,gridcolor:'#2a3441',tickfont:{size:9},angle:90,
+                  title:{text:s.scale==='log'?'dB':'rel.',font:{size:9}}},
+      angularaxis:{rotation:0,direction:'counterclockwise',gridcolor:'#2a3441',tickfont:{size:9},dtick:45}},
+    margin:{l:24,r:24,t:10,b:40}}), CONF);
+}
+
+/* ---------------- spectrum ---------------- */
+function cleanQabs(e){ return Math.abs(e.qabs) < 1e-12*Math.max(e.qext,1e-30) ? 0 : e.qabs; }
+
+function drawSpec(s, tmSpec){
+  const NL=221, lam=linspace(300,2500,NL);
+  const qe=[],qs=[],qa=[];
+  for(let i=0;i<NL;i++){
+    const x = 2*Math.PI*s.nmed*s.a/lam[i];
+    const e = MIE.efficiencies(s.mr,s.mi,x);
+    qe.push(e.qext); qs.push(e.qsca); qa.push(cleanQabs(e));
+  }
+  const L = Array.from(lam);
+  const dash = s.isSphere ? undefined : 'dot';
+  const traces=[
+    {x:L,y:qe,mode:'lines',name:s.isSphere?'Q<sub>ext</sub>':'Q<sub>ext</sub> (sphere)',line:{color:'#e6edf3',width:1.4,dash}},
+    {x:L,y:qs,mode:'lines',name:s.isSphere?'Q<sub>sca</sub>':'Q<sub>sca</sub> (sphere)',line:{color:'#2dd4bf',width:1.4,dash}},
+    {x:L,y:qa,mode:'lines',name:s.isSphere?'Q<sub>abs</sub>':'Q<sub>abs</sub> (sphere)',line:{color:'#f59e0b',width:1.4,dash}}
+  ];
+  if(tmSpec){
+    traces.push({x:tmSpec.lam,y:tmSpec.qext,mode:'lines+markers',name:'Q<sub>ext</sub> (T-matrix)',line:{color:'#e6edf3',width:2},marker:{size:4}});
+    traces.push({x:tmSpec.lam,y:tmSpec.qsca,mode:'lines+markers',name:'Q<sub>sca</sub> (T-matrix)',line:{color:'#2dd4bf',width:2},marker:{size:4}});
+  }
+  Plotly.react('spec', traces, Object.assign({},LAYOUT,{
+    showlegend:true, legend:{x:1,y:1,xanchor:'right',font:{size:9}},
+    xaxis:{title:{text:'λ (nm)',font:{size:10}},gridcolor:'#2a3441',zeroline:false},
+    yaxis:{title:{text:'Q',font:{size:10}},gridcolor:'#2a3441',zeroline:false,
+           type: s.scale==='log' ? 'log':'linear'},
+    shapes:[{type:'line',x0:s.lam,x1:s.lam,yref:'paper',y0:0,y1:1,line:{color:'#8b98a5',width:1,dash:'dot'}}],
+    margin:{l:48,r:10,t:6,b:36}}), CONF);
+}
+
+/* ---------------- near field (sphere only) ---------------- */
+let nfTimer = null;
+function nearGrid(x){ return x<10?161 : x<25?141 : x<40?111 : 91; }
+function drawNear(s){
+  const note = el('nfnote');
+  if(!s.nf){ note.style.display='none'; Plotly.purge('near'); return; }
+  const nmax = MIE.nStop(s.x);
+  if(nmax > 95){
+    note.style.display='block';
+    note.textContent = 'Near field skipped: size parameter x='+s.x.toFixed(1)+' needs '+nmax+
+                       ' multipoles, too slow to keep interactive. Far field and spectrum are still exact.';
+    Plotly.purge('near'); return;
+  }
+  const N = nearGrid(s.x), half = 2.5;
+  const t0 = performance.now();
+  const {u,z,I} = MIE.nearFieldSlice(s.mr,s.mi,s.x,half,N,s.plane);
+  note.style.display='block';
+  note.textContent = 'near field: '+N+'x'+N+' grid, '+nmax+' multipoles, '+(performance.now()-t0).toFixed(0)+' ms';
+
+  const rows=[];
+  for(let iu=0;iu<N;iu++){
+    const r=new Float64Array(N);
+    for(let iz=0;iz<N;iz++){
+      const v = I[iu*N+iz];
+      r[iz] = s.scale==='log' ? Math.max(Math.log10(Math.max(v,1e-6)), -2) : v;
+    }
+    rows.push(Array.from(r));
+  }
+  Plotly.react('near', [{type:'heatmap', x:Array.from(z), y:Array.from(u), z:rows,
+                 colorscale:'Viridis', zsmooth:'best',
+                 colorbar:{title:{text:s.scale==='log'?'log₁₀|E|²':'|E|²',side:'right'},thickness:9,len:.85},
+                 hovertemplate:'z=%{x:.2f}a<br>u=%{y:.2f}a<br>%{z:.3f}<extra></extra>'}],
+    Object.assign({},LAYOUT,{
+    xaxis:{title:{text:'z / a  (propagation)',font:{size:10}},constrain:'domain',zeroline:false},
+    yaxis:{title:{text:(s.plane==='E'?'x':'y')+' / a',font:{size:10}},scaleanchor:'x',scaleratio:1,zeroline:false},
+    shapes:[{type:'circle',xref:'x',yref:'y',x0:-1,y0:-1,x1:1,y1:1,line:{color:'#e6edf3',width:1.2,dash:'dot'}}],
+    annotations:[{x:-2.3,y:0,ax:-60,ay:0,xref:'x',yref:'y',showarrow:true,arrowcolor:'#f59e0b',arrowhead:2,arrowwidth:1.5,text:''}],
+    margin:{l:44,r:10,t:6,b:36}}), CONF);
+}
+
+/* ---------------- readouts ---------------- */
+function drawReadout(s, T){
+  const rows = [
+    ['size parameter x<sub>ev</sub>', s.x.toFixed(3)],
+    ['relative m', s.mr.toFixed(4)+(s.mi?(' + '+s.mi.toFixed(4)+'i'):'')]
+  ];
+  if(s.isSphere){
+    const e = MIE.efficiencies(s.mr,s.mi,s.x);
+    const geo = Math.PI*s.a*s.a*1e-6;
+    rows.push(['multipoles n<sub>max</sub>', e.nmax]);
+    rows.push(['Q<sub>ext</sub>', e.qext.toExponential(4)]);
+    rows.push(['Q<sub>sca</sub>', e.qsca.toExponential(4)]);
+    rows.push(['Q<sub>abs</sub>', cleanQabs(e).toExponential(4)]);
+    rows.push(['Q<sub>back</sub>', e.qback.toExponential(4)]);
+    rows.push(['asymmetry g', e.g.toFixed(5)]);
+    rows.push(['C<sub>sca</sub>', (e.qsca*geo).toExponential(3)+' &micro;m&sup2;']);
+  } else if(T && T.tooBig){
+    rows.push(['T-matrix', '<span class="warnv">needs n<sub>max</sub>='+T.nmax+' &gt; '+NMAX_CAP+'</span>']);
+  } else if(T && T.discOut){
+    rows.push(['biconcave disc', '<span class="badv">x<sub>ev</sub>='+s.x.toFixed(1)+' beyond EBCM (needs DDA)</span>']);
+  } else if(T && T.failed){
+    rows.push(['T-matrix', '<span class="badv">failed: '+T.failed+'</span>']);
+  } else if(T){
+    const e = MIE.efficiencies(s.mr,s.mi,s.x);   // volume-equivalent sphere reference
+    const dg = T.pf.g - e.g;
+    const musRatio = (T.cs.csca*(1-T.pf.g)) / (e.qsca*Math.PI*s.a*s.a*(1-e.g));
+    // If the albedo meter says the T-matrix is not trustworthy, do NOT print derived
+    // numbers. A confident-looking "mu_s' ratio = 10.4" is worse than no number at all.
+    const bad = isFinite(T.albErr) && T.albErr > 1e-3;
+    const cls = !isFinite(T.albErr) ? '' : (T.albErr<1e-4 ? '' : (T.albErr<1e-3 ? 'warnv' : 'badv'));
+    const q = v => bad ? '<span class="badv">unreliable</span>' : v;
+    rows.push(['multipoles n<sub>max</sub>', T.nmax]);
+    rows.push(['|albedo &minus; 1|', isFinite(T.albErr)
+        ? `<span class="${cls}">${T.albErr.toExponential(1)}</span>` : 'n/a (absorbing)']);
+    rows.push(['Q<sub>ext</sub> (orient. avg)', q(T.cs.qext.toExponential(4))]);
+    rows.push(['Q<sub>sca</sub> (orient. avg)', q(T.cs.qsca.toExponential(4))]);
+    // Qabs = Qext - Qsca, so for a lossless particle it is exactly the EBCM residual.
+    // Reporting it as a (negative) absorption is misleading: it lives in |albedo-1|.
+    rows.push(['Q<sub>abs</sub>', s.kp===0 ? '0 (lossless)' : q(T.cs.qabs.toExponential(4))]);
+    rows.push(['asymmetry g (orient. avg)', q(T.pf.g.toFixed(5))]);
+    rows.push(['&Delta;g vs sphere', q((dg>=0?'+':'')+dg.toFixed(5))]);
+    rows.push(['&mu;<sub>s</sub>&prime; ratio vs sphere', q(musRatio.toFixed(4))]);
+    rows.push(['C<sub>sca</sub>', q((T.cs.csca*1e-6).toExponential(3)+' &micro;m&sup2;')]);
+    rows.push(['T-matrix build', T.ms.toFixed(0)+' ms']);
+  }
+  el('readout').innerHTML = rows.map(r=>`<div><span>${r[0]}</span><span>${r[1]}</span></div>`).join('');
+}
+
+/* ---------------- aspect-ratio sweep (button) ---------------- */
+function runSweep(){
+  const s = readState();
+  const btn = el('sweepBtn'), st = el('sweepStatus');
+  if(TM.nmaxDefault(s.x) > NMAX_CAP){
+    st.textContent = 'skipped: x_ev too large for an interactive sweep (n_max > '+NMAX_CAP+')';
+    return;
+  }
+  btn.disabled = true;
+  const lo = s.shape==='chebyshev' ? 0.02 : 1.0;
+  const hi = s.shape==='chebyshev' ? 0.30 : Math.min(3.2, Math.max(2.0, s.eps*1.2));
+  const eps = linspace(lo, hi, 9);
+  const gs=[], rat=[], ok=[];
+  const e0 = MIE.efficiencies(s.mr,s.mi,s.x);
+  const ref = e0.qsca*Math.PI*s.a*s.a*(1-e0.g);
+  let i = 0;
+  function step(){
+    if(i>=9){
+      Plotly.react('near', [
+        {x:Array.from(eps),y:gs,mode:'lines+markers',name:'g (orient. avg)',line:{color:'#2dd4bf'},yaxis:'y'},
+        {x:Array.from(eps),y:rat,mode:'lines+markers',name:'μₛ′ ratio vs sphere',line:{color:'#f59e0b'},yaxis:'y2'}
+      ], Object.assign({},LAYOUT,{
+        showlegend:true, legend:{x:.5,y:-.22,xanchor:'center',orientation:'h',font:{size:10}},
+        xaxis:{title:{text:(s.shape==='cylinder'?'D/L':'axis ratio ε'),font:{size:10}},gridcolor:'#2a3441'},
+        yaxis:{title:{text:'g',font:{size:10}},gridcolor:'#2a3441'},
+        yaxis2:{title:{text:'μₛ′ ratio',font:{size:10}},overlaying:'y',side:'right',gridcolor:'#1c232c'},
+        margin:{l:48,r:48,t:6,b:56}}), CONF);
+      st.textContent = 'done';
+      btn.disabled = false;
+      return;
+    }
+    st.textContent = `computing ${i+1}/9 …`;
+    try{
+      const r = TM.tmatrix(s.a, s.k, s.mr, s.mi, s.shape, eps[i], TM.nmaxDefault(s.x), TM.nmaxDefault(s.x)*2, s.chebN);
+      const cs = TM.crossSectionsRandom(r.blocks, s.k, s.a);
+      const pf = TM.phaseFunctionRandom(r.blocks, r.nmax, s.k, 8, 20, Math.max(36, r.nmax+12));
+      gs.push(pf.g); rat.push(cs.csca*(1-pf.g)/ref); ok.push(true);
+    }catch(e){ gs.push(null); rat.push(null); ok.push(false); }
+    i++;
+    setTimeout(step, 0);
+  }
+  setTimeout(step, 0);
+}
+
+/* ---------------- T-matrix spectrum (button) ---------------- */
+function runSpec(){
+  const s = readState();
+  const btn = el('specBtn'), st = el('specStatus');
+  btn.disabled = true;
+  const lams = linspace(Math.max(400, s.lam*0.5), Math.min(2400, s.lam*1.8), 11);
+  const out = {lam:[], qext:[], qsca:[]};
+  let i=0;
+  function step(){
+    if(i>=11){ drawSpec(s, out); st.textContent='done'; btn.disabled=false; return; }
+    st.textContent = `computing ${i+1}/11 …`;
+    const k = 2*Math.PI*s.nmed/lams[i];
+    const nmax = TM.nmaxDefault(k*s.a);
+    if(nmax<=NMAX_CAP){
+      try{
+        const r = TM.tmatrix(s.a, k, s.mr, s.mi, s.shape, s.eps, nmax, nmax*2, s.chebN);
+        const cs = TM.crossSectionsRandom(r.blocks, k, s.a);
+        out.lam.push(lams[i]); out.qext.push(cs.qext); out.qsca.push(cs.qsca);
+      }catch(e){}
+    }
+    i++; setTimeout(step,0);
+  }
+  setTimeout(step,0);
+}
+
+/* ---------------- orchestration ---------------- */
+function update(){
+  const s = readState();
+  syncLabels(s); toggleControls(s);
+  const note = el('nfnote');
+
+  if(s.isSphere){
+    note.style.display='none';
+    drawReadout(s, null); drawFar(s, null); drawPolar(s, null); drawSpec(s, null);
+    clearTimeout(nfTimer);
+    nfTimer = setTimeout(()=>drawNear(readState()), 140);
+    return;
+  }
+
+  // T-matrix tier: debounce, it costs real time
+  Plotly.purge('near');
+  note.style.display='block';
+  note.textContent = 'computing T-matrix …';
+  clearTimeout(nfTimer);
+  nfTimer = setTimeout(()=>{
+    const s2 = readState();
+    const T = tmatrixFor(s2);
+    if(T.tooBig){
+      note.textContent = 'T-matrix skipped: x_ev='+s2.x.toFixed(1)+' needs n_max='+T.nmax+
+        ' (cap '+NMAX_CAP+'). Reduce the radius or increase the wavelength.';
+    } else if(T.discOut){
+      note.textContent = 'Biconcave disc at x_ev='+s2.x.toFixed(1)+' is beyond double-precision EBCM '+
+        '(converges only x_ev<~1). The true RBC disc needs DDA or extended-precision EBCM. '+
+        'Try the "disc demo" preset to see it converge sub-wavelength.';
+    } else if(T.failed){
+      note.textContent = 'T-matrix failed: '+T.failed;
+    } else {
+      const warn = (isFinite(T.albErr) && T.albErr>1e-3)
+        ? '  WARNING: |albedo-1|='+T.albErr.toExponential(1)+', outside EBCM double-precision domain'
+        : '';
+      note.textContent = 'T-matrix: n_max='+T.nmax+', '+T.ms.toFixed(0)+' ms'+warn;
+    }
+    drawReadout(s2, T); drawFar(s2, T); drawPolar(s2, T); drawSpec(s2, null);
+  }, 180);
+}
+
+for(const k of CTRL) el(k).addEventListener('input', ()=>{ el('preset').value=''; update(); });
+el('shape').addEventListener('change', update);
+el('preset').addEventListener('change', ()=>{
+  const p = PRESETS[el('preset').value];
+  if(!p) return;
+  for(const k in p) el(k).value = p[k];
+  update();
+});
+el('sweepBtn').addEventListener('click', runSweep);
+el('specBtn').addEventListener('click', runSpec);
+
+/* self-test both JS ports against the embedded Python reference */
+(function(){
+  const t0 = performance.now();
+  let m, t;
+  try { m = MIE.selfTest(REFERENCE); t = TM.selfTest(REFERENCE); }
+  catch(err){ el('selftest').innerHTML = '<span class="bad">self-test ERROR: '+err.message+'</span>'; return; }
+  const ms = (performance.now()-t0).toFixed(0);
+  const pass = m.pass && t.pass;
+  el('selftest').innerHTML = pass
+    ? `<span class="ok">&#10003; self-test PASS</span>: Mie port to `
+      + `${m.worst.toExponential(1)}, T-matrix port to ${t.worst.toExponential(1)} `
+      + `(${REFERENCE.cases.length} Mie + ${REFERENCE.nearfield.length} near-field + `
+      + `${REFERENCE.tmatrix.length} T-matrix cases, ${ms} ms)`
+    : `<span class="bad">&#10007; self-test FAIL</span>: Mie ${m.worst.toExponential(2)}, `
+      + `T-matrix ${t.worst.toExponential(2)}<br>` + m.failures.concat(t.failures).slice(0,6).join('<br>');
+})();
+
+el('built').textContent = '  Built __BUILT__.';
+update();
+</script>
+</body>
+</html>

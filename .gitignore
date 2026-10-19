@@ -1,0 +1,7 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+dist/
+# docs/index.html is the built page served by GitHub Pages; it is committed on purpose.

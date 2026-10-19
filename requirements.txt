@@ -1,0 +1,10 @@
+# Core: the solvers, validation suites and the RBC study need only NumPy.
+numpy>=1.24
+
+# Build: explorer_build.py inlines plotly.min.js from the plotly Python package.
+# Not needed with `python explorer_build.py --cdn` or `--plotly PATH`.
+plotly>=6
+
+# Optional: independent cross-check in validate.py (Part 2 is skipped if absent).
+# Tested with miepython 3.1.0; other major versions may change the API.
+miepython>=3.0,<4

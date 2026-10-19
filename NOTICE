@@ -1,0 +1,47 @@
+Particle Scattering Explorer
+Copyright (c) 2026 The Particle Scattering Explorer authors
+Licensed under the MIT License (see LICENSE).
+
+This project includes or derives from the following third-party work.
+
+1. T-matrix (EBCM) code
+   tmatrix.py and tmatrix.js are ports of the Fortran routine ampld.lp.f by
+   M. I. Mishchenko (NASA Goddard Institute for Space Studies), released into the
+   public domain. The port was made from the copy distributed with the pytmatrix
+   package (J. Leinonen). The authors of the original code request that its use be
+   acknowledged by citing:
+     - M. I. Mishchenko and L. D. Travis, "T-matrix computations of light
+       scattering by large spheroidal particles", Opt. Commun. 109, 16-21 (1994).
+     - M. I. Mishchenko, L. D. Travis and D. W. Mackowski, "T-matrix computations
+       of light scattering by nonspherical particles: a review", J. Quant.
+       Spectrosc. Radiat. Transfer 55, 535-575 (1996).
+   The method is P. C. Waterman's extended boundary condition method (Proc. IEEE
+   53, 805 (1965); Phys. Rev. D 3, 825 (1971)).
+
+2. Lorenz-Mie conventions
+   mie.py and mie.js follow the notation and conventions of C. F. Bohren and
+   D. R. Huffman, "Absorption and Scattering of Light by Small Particles"
+   (Wiley, 1983). The series truncation is W. J. Wiscombe's, "Improved Mie
+   scattering algorithms", Appl. Opt. 19, 1505 (1980). No code from either
+   source is included.
+
+3. Red-blood-cell shape
+   The biconcave profile is the Evans-Fung parametrisation: E. Evans and
+   Y.-C. Fung, "Improved measurements of the erythrocyte geometry", Microvasc.
+   Res. 4, 335-347 (1972).
+
+4. Plotly.js (bundled in the built page only)
+   The built HTML (dist/scattering_explorer.html, docs/index.html) inlines
+   plotly.js, Copyright (c) Plotly, Inc., released under the MIT License
+   (https://github.com/plotly/plotly.js/blob/master/LICENSE). Its copyright
+   header is preserved inside the built file. Plotly is not included in the
+   source files of this repository.
+
+5. Optional test dependency
+   validate.py optionally cross-checks against miepython (S. Prahl, MIT License),
+   if installed. It is not bundled.
+
+Refractive indices used in the presets and in rbc_shape_study.py are rounded,
+illustrative values of the kind found in the standard literature and in the
+RefractiveIndex.INFO database (https://refractiveindex.info). They are not
+measured for any specific sample and carry no dispersion.
